@@ -51,8 +51,9 @@ namespace cqhttp.Cyan.Clients.Listeners {
 
         async void Process (string message) {
             try {
-                if (string.IsNullOrEmpty (message))
+                if (string.IsNullOrEmpty (message) || message.Contains("heartbeat"))
                     return;
+                System.Console.WriteLine(message);
                 CQResponse response = await GetResponse (message);
                 if (response is EmptyResponse == false) {
                     if (caller != null)

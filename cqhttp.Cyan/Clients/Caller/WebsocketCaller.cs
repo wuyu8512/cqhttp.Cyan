@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
@@ -24,6 +25,7 @@ namespace cqhttp.Cyan.Clients.Callers {
             this.access_token = access_token;
         }
         public async Task Reconnect () {
+            Console.WriteLine(access_url);
             client.Abort ();
             client = new ClientWebSocket ();
             await client.ConnectAsync (
@@ -39,7 +41,8 @@ namespace cqhttp.Cyan.Clients.Callers {
                 token_source.Token
             );
         }
-        async Task<string> ReceiveText () {
+        async Task<string> ReceiveText (int flag) {
+            receive :
             string result = "";
             byte[] buffer = new byte[1024 * 3];
             while (true) {
@@ -51,6 +54,8 @@ namespace cqhttp.Cyan.Clients.Callers {
                 if (res.EndOfMessage)
                     break;
             }
+            if (!result.Contains($"\"echo\":{flag}")) goto receive;
+            Console.WriteLine(result);
             return result;
         }
         SemaphoreSlim lock_ = new SemaphoreSlim (1, 1);
@@ -58,15 +63,17 @@ namespace cqhttp.Cyan.Clients.Callers {
         public async Task<ApiResult> SendRequestAsync (ApiRequest x) {
             var wait = lock_.WaitAsync ();
             try {
+                Console.WriteLine(x.api_path);
                 JObject constructor = new JObject ();
                 constructor["action"] = x.api_path.Substring (1);
                 constructor["params"] = JObject.Parse (x.content);
-                constructor["echo"] = System.DateTime.Now.Millisecond;
+                var echo = System.DateTime.Now.Millisecond;
+                constructor["echo"] = echo;
                 await wait;
                 if (client.State != WebSocketState.Open)
                     await Reconnect ();
                 await SendText (constructor.ToString (Newtonsoft.Json.Formatting.None));
-                var resp = await ReceiveText ();
+                var resp = await ReceiveText (echo);
                 if (resp.Contains ("authorization failed"))
                     throw new Exceptions.ErrorApicallException ("access token 有误");
                 x.response.Parse (JToken.Parse (resp));
